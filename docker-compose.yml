@@ -1,0 +1,41 @@
+services:
+
+  external-api:
+    build: ./external-api
+    ports:
+      - "8081:8081"
+    environment:
+      WORK_DELAY_MS: 50
+      SERVER_TOMCAT_CONNECTION_TIMEOUT: 60000
+    networks:
+      - lab-net
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.9.0
+    command: ["-config", "/config/toxiproxy.json", "-host", "0.0.0.0"]
+    ports:
+      - "8474:8474"   # Toxiproxy 관리 API
+      - "8888:8888"   # external-api 프록시 포트
+    volumes:
+      - ./toxiproxy.json:/config/toxiproxy.json:ro
+    depends_on:
+      - external-api
+    networks:
+      - lab-net
+
+  caller-service:
+    build: ./caller-service
+    ports:
+      - "8080:8080"
+    environment:
+      EXTERNAL_API_BASE_URL: http://toxiproxy:8888
+      TOXIPROXY_API_URL: http://toxiproxy:8474
+      EXPERIMENT_TIMEOUT_MS: 100
+    depends_on:
+      - toxiproxy
+    networks:
+      - lab-net
+
+networks:
+  lab-net:
+    driver: bridge

@@ -1,0 +1,16 @@
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: caller-service
+
+external-api:
+  base-url: ${EXTERNAL_API_BASE_URL:http://localhost:8888}
+
+toxiproxy:
+  api-url: ${TOXIPROXY_API_URL:http://localhost:8474}
+
+experiment:
+  timeout-ms: ${EXPERIMENT_TIMEOUT_MS:100}

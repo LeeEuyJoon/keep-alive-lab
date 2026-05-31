@@ -1,0 +1,11 @@
+server:
+  port: 8081
+  tomcat:
+    connection-timeout: ${SERVER_TOMCAT_CONNECTION_TIMEOUT:60000}
+
+spring:
+  application:
+    name: external-api
+
+work:
+  delay-ms: ${WORK_DELAY_MS:50}

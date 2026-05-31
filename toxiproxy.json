@@ -1,0 +1,8 @@
+[
+  {
+    "name": "external-api",
+    "listen": "0.0.0.0:8888",
+    "upstream": "external-api:8081",
+    "enabled": true
+  }
+]
