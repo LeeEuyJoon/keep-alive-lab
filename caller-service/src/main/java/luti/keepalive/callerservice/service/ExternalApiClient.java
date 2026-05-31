@@ -1,6 +1,10 @@
 package luti.keepalive.callerservice.service;
 
+
+
 import luti.keepalive.callerservice.dto.CallResult;
+import luti.keepalive.callerservice.dto.WorkResponse;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -21,18 +25,23 @@ public class ExternalApiClient {
     }
 
     public CallResult callWork() {
+        return callWork(this.webClient);
+    }
+
+    public CallResult callWork(WebClient client) {
         long start = System.currentTimeMillis();
 
         try {
-            webClient.get()
+            WorkResponse response = client.get()
                      .uri("/work")
                      .retrieve()
-                     .bodyToMono(String.class)
+                     .bodyToMono(WorkResponse.class)
                      .timeout(Duration.ofMillis(timeoutMs))
                      .block();
 
             long latency = System.currentTimeMillis() - start;
-            return CallResult.success(latency);
+            boolean isCold = response != null && response.coldConnection();
+            return CallResult.success(latency, isCold);
 
         } catch (Exception e) {
             long latency = System.currentTimeMillis() - start;
