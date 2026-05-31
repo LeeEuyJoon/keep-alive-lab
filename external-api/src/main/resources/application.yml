@@ -9,3 +9,7 @@ spring:
 
 work:
   delay-ms: ${WORK_DELAY_MS:50}
+
+cold:
+  connection:
+    penalty-ms: ${COLD_CONNECTION_PENALTY_MS:60}

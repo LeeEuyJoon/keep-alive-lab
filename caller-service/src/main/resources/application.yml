@@ -11,6 +11,7 @@ external-api:
 
 toxiproxy:
   api-url: ${TOXIPROXY_API_URL:http://localhost:8474}
+  latency-ms: ${TOXIPROXY_LATENCY_MS:15}
 
 experiment:
   timeout-ms: ${EXPERIMENT_TIMEOUT_MS:100}

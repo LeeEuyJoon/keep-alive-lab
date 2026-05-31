@@ -11,7 +11,7 @@ services:
       - lab-net
 
   toxiproxy:
-    image: ghcr.io/shopify/toxiproxy:2.9.0
+    image: ghcr.io/shopify/toxiproxy:latest
     command: ["-config", "/config/toxiproxy.json", "-host", "0.0.0.0"]
     ports:
       - "8474:8474"   # Toxiproxy 관리 API
