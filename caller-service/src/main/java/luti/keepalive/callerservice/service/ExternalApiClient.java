@@ -52,4 +52,14 @@ public class ExternalApiClient {
             return CallResult.failure(latency, e.getMessage());
         }
     }
+
+    public void reset() {
+        try {
+            webClient.post().uri("/reset")
+                .retrieve()
+                .toBodilessEntity()
+                .timeout(Duration.ofSeconds(5))
+                .block();
+        } catch (Exception ignored) {}
+    }
 }
