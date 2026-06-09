@@ -93,4 +93,21 @@ public class ExperimentController {
 			experimentRunner.run("WARM_UP_ON", client, totalRequests, intervalMs, true, 10000));
 	}
 
+	/**
+	 * keep-alive pool 크기별 리소스 비용 측정.
+	 * maxConnections < concurrency → pool 고갈 → errorCount 증가
+	 * maxConnections >= concurrency → 정상 처리 → heap/FD 더 점유
+	 */
+	@PostMapping("/resource-cost")
+	public ResponseEntity<ExperimentResult> resourceCost(
+		@RequestParam(defaultValue = "10") int maxConnections,
+		@RequestParam(defaultValue = "10") int concurrency,
+		@RequestParam(defaultValue = "3") int repeat) {
+		WebClient client = webClientFactory.withPool(maxConnections);
+		return ResponseEntity.ok(
+			experimentRunner.runConcurrent(
+				"RESOURCE_COST_pool" + maxConnections + "_c" + concurrency,
+				client, concurrency, repeat));
+	}
+
 }

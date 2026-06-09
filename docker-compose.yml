@@ -31,7 +31,7 @@ services:
     environment:
       EXTERNAL_API_BASE_URL: http://toxiproxy:8888
       TOXIPROXY_API_URL: http://toxiproxy:8474
-      EXPERIMENT_TIMEOUT_MS: 140
+      EXPERIMENT_TIMEOUT_MS: ${EXPERIMENT_TIMEOUT_MS:-140}
     depends_on:
       - toxiproxy
     networks:

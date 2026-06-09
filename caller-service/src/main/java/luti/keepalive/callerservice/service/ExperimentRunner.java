@@ -2,6 +2,7 @@ package luti.keepalive.callerservice.service;
 
 import luti.keepalive.callerservice.dto.CallResult;
 import luti.keepalive.callerservice.dto.ExperimentResult;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,14 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import com.sun.management.UnixOperatingSystemMXBean;
+
+import java.lang.management.ManagementFactory;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.IntStream;
 
 @Service
 public class ExperimentRunner {
@@ -46,7 +55,8 @@ public class ExperimentRunner {
 
 			if (result.success()) {
 				successCount++;
-				if (result.coldConnection()) coldConnectionCount++;
+				if (result.coldConnection())
+					coldConnectionCount++;
 			} else if ("timeout".equals(result.error())) {
 				timeoutCount++;
 			} else {
@@ -58,7 +68,8 @@ public class ExperimentRunner {
 					 result.success() ? (result.coldConnection() ? "cold" : "warm") : result.error());
 		}
 
-		return aggregate(scenario, totalRequests, successCount, timeoutCount, errorCount, coldConnectionCount, latencies);
+		return aggregate(scenario, totalRequests, successCount, timeoutCount, errorCount, coldConnectionCount,
+						 latencies);
 	}
 
 	private void preWarm(String scenario, WebClient webClient) {
@@ -122,18 +133,101 @@ public class ExperimentRunner {
 									   int successCount, int timeoutCount, int errorCount,
 									   int coldConnectionCount, List<Long> latencies) {
 		Collections.sort(latencies);
-		double timeoutRate = totalRequests > 0 ? (double) timeoutCount / totalRequests : 0;
+		double timeoutRate = totalRequests > 0 ? (double)timeoutCount / totalRequests : 0;
 		double avgLatency = latencies.stream().mapToLong(Long::longValue).average().orElse(0);
 		long p50 = percentile(latencies, 50);
 		long p95 = percentile(latencies, 95);
 		long p99 = percentile(latencies, 99);
 		return new ExperimentResult(scenario, totalRequests, successCount, timeoutCount, errorCount,
-									timeoutRate, coldConnectionCount, avgLatency, p50, p95, p99);
+									timeoutRate, coldConnectionCount, avgLatency, p50, p95, p99, -1L, -1L);
+	}
+
+	private ExperimentResult aggregateWithResources(String scenario, int totalRequests,
+													 int successCount, int timeoutCount, int errorCount,
+													 int coldConnectionCount, List<Long> latencies,
+													 long heapUsedMb, long openFdCount) {
+		Collections.sort(latencies);
+		double timeoutRate = totalRequests > 0 ? (double)timeoutCount / totalRequests : 0;
+		double avgLatency = latencies.stream().mapToLong(Long::longValue).average().orElse(0);
+		long p50 = percentile(latencies, 50);
+		long p95 = percentile(latencies, 95);
+		long p99 = percentile(latencies, 99);
+		return new ExperimentResult(scenario, totalRequests, successCount, timeoutCount, errorCount,
+									timeoutRate, coldConnectionCount, avgLatency, p50, p95, p99,
+									heapUsedMb, openFdCount);
+	}
+
+	private long snapshotHeapMb() {
+		Runtime rt = Runtime.getRuntime();
+		return (rt.totalMemory() - rt.freeMemory()) / (1024 * 1024);
+	}
+
+	private long snapshotOpenFd() {
+		try {
+			var osBean = ManagementFactory.getOperatingSystemMXBean();
+			if (osBean instanceof UnixOperatingSystemMXBean unixBean) {
+				return unixBean.getOpenFileDescriptorCount();
+			}
+		} catch (Exception ignored) {}
+		return -1;
 	}
 
 	private long percentile(List<Long> sorted, int p) {
-		if (sorted.isEmpty()) return 0;
-		int index = (int) Math.ceil(p / 100.0 * sorted.size()) - 1;
+		if (sorted.isEmpty())
+			return 0;
+		int index = (int)Math.ceil(p / 100.0 * sorted.size()) - 1;
 		return sorted.get(Math.max(0, index));
 	}
+
+	/**
+	 * concurrency개 요청을 동시에 발사. repeat번 반복.
+	 * 리소스 스냅샷(heap, FD)을 실험 후에 측정한다.
+	 */
+	public ExperimentResult runConcurrent(String scenario, WebClient webClient,
+										  int concurrency, int repeat) {
+		externalApiClient.reset();
+		preWarm(scenario, webClient);
+
+		ExecutorService executor = Executors.newCachedThreadPool();
+		List<Long> latencies = new ArrayList<>();
+		int successCount = 0, timeoutCount = 0, errorCount = 0, coldConnectionCount = 0;
+
+		for (int r = 0; r < repeat; r++) {
+			List<CompletableFuture<CallResult>> futures = IntStream.range(0, concurrency)
+																   .mapToObj(i -> CompletableFuture.supplyAsync(
+																	   () -> externalApiClient.callWork(webClient), executor))
+																   .toList();
+
+			for (CompletableFuture<CallResult> future : futures) {
+				try {
+					CallResult result = future.join();
+					latencies.add(result.latencyMs());
+					if (result.success()) {
+						successCount++;
+						if (result.coldConnection()) coldConnectionCount++;
+					} else if ("timeout".equals(result.error())) {
+						timeoutCount++;
+					} else {
+						errorCount++;
+					}
+				} catch (Exception e) {
+					errorCount++;
+					latencies.add(0L);
+					log.warn("[{}] 요청 예외: {}", scenario, e.getMessage());
+				}
+			}
+
+			log.info("[{}] {}/{} 라운드 완료", scenario, r + 1, repeat);
+		}
+
+		executor.shutdown();
+
+		int totalRequests = concurrency * repeat;
+		long heapUsedMb = snapshotHeapMb();
+		long openFdCount = snapshotOpenFd();
+
+		return aggregateWithResources(scenario, totalRequests, successCount, timeoutCount,
+									  errorCount, coldConnectionCount, latencies, heapUsedMb, openFdCount);
+	}
+
 }

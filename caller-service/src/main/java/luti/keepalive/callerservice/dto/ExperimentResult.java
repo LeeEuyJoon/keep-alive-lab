@@ -11,6 +11,8 @@ public record ExperimentResult(
 	double avgLatencyMs,
 	long p50LatencyMs,
 	long p95LatencyMs,
-	long p99LatencyMs
+	long p99LatencyMs,
+	long heapUsedMb,
+	long openFdCount
 ) {
 }

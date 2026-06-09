@@ -37,4 +37,16 @@ public class WebClientFactory {
 			.build();
 	}
 
+	public WebClient withPool(int maxConnections) {
+		ConnectionProvider provider = ConnectionProvider.builder("pool-" + maxConnections)
+														.maxConnections(maxConnections)
+														.maxIdleTime(Duration.ofSeconds(60))
+														.pendingAcquireTimeout(Duration.ofMillis(200))  // pool 고갈 시 200ms 대기 후 에러
+														.build();
+		HttpClient httpClient = HttpClient.create(provider);
+		return WebClient.builder()
+						.baseUrl(baseUrl)
+						.clientConnector(new ReactorClientHttpConnector(httpClient))
+						.build();
+	}
 }
